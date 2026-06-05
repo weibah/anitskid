@@ -31,7 +31,7 @@
     "anti_skid/environment.py": "8e591a75c3b0c87265b2a07e0790aff872866d95b009762a2cdf86d1dd64aa5c",
     "anti_skid/integrity.py": "a544357641165b58480df2218fb021d20140dbc6103a5e6e991fc06ad6af62a2",
     "anti_skid/manifest.py": "6d37215fc55cfc097946780fa65213e46c50b36a0919eddbe8b67ac5a71f3814",
-    "anti_skid/telemetry.py": "847420de435e06783a1e242f50e53112cdb31ed22bdce14829567fc50fc8d83a",
+    "anti_skid/telemetry.py": "0969d91b79fbd2a2059d3142749bca27fc2335a8874105a65a6284f7e0e8da91",
     "inject.py": "4ffa2fc697265c3a00be0e8d1d1e715c2426d84a0eab3bda588da36e381521e5",
     "setup.py": "17fc1192bf6033a221d6555644dcd8c5e3b9861149a7a86f32b122524cdf64a4"
   }

