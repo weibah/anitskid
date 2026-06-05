@@ -206,7 +206,8 @@ def inject(target_path: str) -> bool:
     return True
 
 
-if __name__ == "__main__":
+def main_inject():
+    """cli entry point for anti-skid-inject"""
     if len(sys.argv) > 1:
         path = sys.argv[1]
     else:
@@ -222,3 +223,7 @@ if __name__ == "__main__":
 
     ok = inject(path)
     sys.exit(0 if ok else 1)
+
+
+if __name__ == "__main__":
+    main_inject()

