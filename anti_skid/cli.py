@@ -1,7 +1,5 @@
-"""
-Anti-Skid :: Command-Line Interface
-Provides a console entry-point for manifest generation.
-"""
+# cli to generate manifest.json
+# usage: anti-skid-gen [folder]
 
 import argparse
 import os
@@ -11,44 +9,34 @@ from anti_skid.manifest import generate_manifest
 
 
 def generate_manifest_cli(argv=None):
-    """CLI entry point: anti-skid-gen"""
-    parser = argparse.ArgumentParser(
-        description="Anti-Skid Manifest Generator — create the integrity baseline.",
+    # anti-skid-gen entry point
+    p = argparse.ArgumentParser(
+        description="make ur manifest.json so anti-skid knows what files to watch",
         prog="anti-skid-gen",
     )
-    parser.add_argument(
-        "root",
-        nargs="?",
-        default=".",
-        help="Project root directory (default: current working directory)",
-    )
-    parser.add_argument(
-        "-o", "--output",
-        default=None,
-        help="Output path for manifest.json (default: <root>/manifest.json)",
-    )
-    parser.add_argument(
+    p.add_argument("root", nargs="?", default=".", help="project folder (default: here)")
+    p.add_argument("-o", "--output", default=None, help="where to save manifest.json")
+    p.add_argument(
         "--extensions",
         nargs="+",
         default=[".py", ".pyw", ".pyc", ".pyd", ".so", ".dll"],
-        help="File extensions to include (space-separated)",
+        help="file types to include",
     )
-    parser.add_argument(
+    p.add_argument(
         "--exclude-dirs",
         nargs="+",
         default=[
-            "__pycache__", ".git", ".svn", ".hg",
-            "node_modules", "venv", ".venv", "env",
-            "build", "dist", ".tox", ".eggs",
+            "__pycache__", ".git", ".svn", ".hg", "node_modules",
+            "venv", ".venv", "env", "build", "dist", ".tox", ".eggs",
         ],
-        help="Directories to exclude (space-separated)",
+        help="folders to skip",
     )
 
-    args = parser.parse_args(argv if argv is not None else sys.argv[1:])
+    args = p.parse_args(argv if argv is not None else sys.argv[1:])
 
     root = os.path.abspath(args.root)
     if not os.path.isdir(root):
-        print(f"Error: '{root}' is not a directory.", file=sys.stderr)
+        print(f"bro that aint a folder: {root}", file=sys.stderr)
         sys.exit(1)
 
     generate_manifest(

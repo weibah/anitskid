@@ -26,12 +26,12 @@
     "*.egg-info"
   ],
   "files": {
-    "anti_skid/__init__.py": "67b10e72a563af971551a74b65e867f11f9f268a60378a3019f53130b6e03d2e",
-    "anti_skid/cli.py": "0589b270e12114ff09e598c4883a01f42bbe4ebd18fdabf6d0af6b1fb8caa065",
-    "anti_skid/environment.py": "f4653e1cf41632d9de17dcb140abef52209254618219b19a42aa3ef59a7e3fff",
-    "anti_skid/integrity.py": "adcfb4d6213a16fdd5b74bf8c533e68060ca1ee84005037fb1f4c6e853d693cf",
-    "anti_skid/manifest.py": "3b55671ab3cb3dafcd36ef4c1e49c3b1a84f1953200123ae5d965ed3e7692ac1",
-    "anti_skid/telemetry.py": "25b80b4fcf81493ed7d41a17808ac65e2a86ec63ab025ebb61c03b7c1b6a4e99",
-    "setup.py": "a6b2c632c3a85e9b7d39a02e08b59ee7f6e6b912a0efcf05620d6ab4677d87dc"
+    "anti_skid/__init__.py": "8ed2287b0fe5bebc0bbbcaa40526618520bb0b1485bd2876019f1d7d0b8f76d6",
+    "anti_skid/cli.py": "f28261fe368b2d99757287bff07efc483eb222369f87605a501b7762ca398faf",
+    "anti_skid/environment.py": "15b201703006d2d065ba2f6ebff980149c11be6839d9163181150c64eb47dba7",
+    "anti_skid/integrity.py": "a544357641165b58480df2218fb021d20140dbc6103a5e6e991fc06ad6af62a2",
+    "anti_skid/manifest.py": "6d37215fc55cfc097946780fa65213e46c50b36a0919eddbe8b67ac5a71f3814",
+    "anti_skid/telemetry.py": "f8c1d1ab0784e08584c27df9525693978768f5b3d2c1cce7e3ac3a301cc3a951",
+    "setup.py": "77dfcd2248445f21828f9aa3052eca9d5038d1613a133145697981eae4e6456f"
   }
 }

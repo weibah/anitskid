@@ -1,32 +1,27 @@
-"""
-Anti-Skid :: Environment Diagnostics Module
-Collects host metadata, network status, and container/VM indicators.
-"""
+# sniffs the host for info so u know whos stealing ur stuff
+# ip, ports, discord process, vm detection etc
 
 import os
 import socket
 import platform
 import subprocess
 import sys
-import threading
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-# ---------------------------------------------------------------------------
-# IP / Host metadata
-# ---------------------------------------------------------------------------
+# --------------- ip stuff ---------------
 
-def _get_public_ip(timeout: float = 4.0) -> str:
-    """Retrieve the public-facing IP address via ipify."""
+def _pub_ip(timeout: float = 4.0) -> str:
+    # grabs ur public ip from ipify
     try:
         with urllib.request.urlopen("https://api.ipify.org", timeout=timeout) as r:
             return r.read().decode("utf-8").strip()
-    except Exception:
-        return "UNAVAILABLE"
+    except:
+        return "DEAD"
 
 
-def _get_local_ip() -> str:
-    """Best-effort local network IP."""
+def _local_ip() -> str:
+    # best effort local ip
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.settimeout(1)
@@ -34,29 +29,25 @@ def _get_local_ip() -> str:
         ip = s.getsockname()[0]
         s.close()
         return ip
-    except Exception:
+    except:
         return "127.0.0.1"
 
 
-def get_host_info() -> dict:
-    """Return a dict with basic host identification."""
+def grab_host() -> dict:
+    # who are u
     return {
         "hostname": socket.gethostname(),
-        "username": os.environ.get("USERNAME")
-                     or os.environ.get("USER")
-                     or "UNKNOWN",
-        "local_ip": _get_local_ip(),
-        "public_ip": _get_public_ip(),
+        "username": os.environ.get("USERNAME") or os.environ.get("USER") or "???",
+        "local_ip": _local_ip(),
+        "public_ip": _pub_ip(),
         "platform": platform.platform(),
         "python_version": sys.version,
     }
 
 
-# ---------------------------------------------------------------------------
-# Port scanning (common ports)
-# ---------------------------------------------------------------------------
+# --------------- port scan ---------------
 
-_COMMON_PORTS = [
+_ports_to_check = [
     (22, "SSH"),
     (80, "HTTP"),
     (443, "HTTPS"),
@@ -74,129 +65,111 @@ _COMMON_PORTS = [
 ]
 
 
-def _scan_port(host: str, port: int) -> tuple:
-    """Attempt a TCP connect to *host:port*.  Returns (port, label, open)."""
+def _poke_port(host: str, port: int):
+    # tries to connect to a port, returns if its open
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.settimeout(0.6)
-    result = s.connect_ex((host, port))
+    ok = s.connect_ex((host, port))
     s.close()
-    return port, result == 0
+    return port, ok == 0
 
 
-def get_port_status(host: str = "127.0.0.1") -> dict:
-    """Scan a subset of common ports on *host* and return status map."""
-    status = {}
+def scan_ports(host: str = "127.0.0.1") -> dict:
+    # scans common ports on localhost
+    res = {}
     with ThreadPoolExecutor(max_workers=8) as pool:
-        futures = {pool.submit(_scan_port, host, port): (port, label)
-                   for port, label in _COMMON_PORTS}
-        for future in as_completed(futures):
-            port, label = futures[future]
+        futures = {pool.submit(_poke_port, host, p): (p, lbl) for p, lbl in _ports_to_check}
+        for f in as_completed(futures):
+            port, label = futures[f]
             try:
-                p, is_open = future.result()
-                status[f"{port}/{label}"] = "OPEN" if is_open else "closed"
-            except Exception:
-                status[f"{port}/{label}"] = "error"
-    return status
+                _, is_open = f.result()
+                res[f"{port}/{label}"] = "OPEN" if is_open else "closed"
+            except:
+                res[f"{port}/{label}"] = "err"
+    return res
 
 
-# ---------------------------------------------------------------------------
-# Discord / container / VM detection
-# ---------------------------------------------------------------------------
+# --------------- process / vm checks ---------------
 
-def _process_exists(proc_name: str) -> bool:
-    """Cross-platform process-exists check via tasklist / ps."""
+def _proc_running(name: str) -> bool:
+    # checks if a process is running (windows uses tasklist, linux uses pgrep)
     try:
         if sys.platform == "win32":
             out = subprocess.check_output(
-                ["tasklist", "/FI", f"IMAGENAME eq {proc_name}"],
-                shell=False,
-                timeout=5,
+                ["tasklist", "/FI", f"IMAGENAME eq {name}"], shell=False, timeout=5
             )
-            return proc_name.encode().lower() in out.lower()
+            return name.encode().lower() in out.lower()
         else:
-            out = subprocess.check_output(["pgrep", "-f", proc_name], timeout=5)
+            out = subprocess.check_output(["pgrep", "-f", name], timeout=5)
             return bool(out.strip())
-    except Exception:
+    except:
         return False
 
 
-def detect_discord() -> bool:
-    """Return True if a Discord desktop client process is active."""
-    discords = ["Discord.exe", "discord", "DiscordCanary.exe", "DiscordPTB.exe"]
-    for name in discords:
-        if _process_exists(name):
+def discord_check() -> bool:
+    # is discord open
+    names = ["Discord.exe", "discord", "DiscordCanary.exe", "DiscordPTB.exe"]
+    for n in names:
+        if _proc_running(n):
             return True
     return False
 
 
-def detect_container_or_vm() -> dict:
-    """Lightweight heuristics for container / VM environments."""
+def vmcheck() -> dict:
+    # tries to figure out if ur in a vm or container or whatever
     clues = {}
 
-    # Docker /.dockerenv
     clues["docker_env_file"] = os.path.exists("/.dockerenv")
 
-    # cgroup inspection (Linux only – harmless elsewhere)
     try:
         with open("/proc/1/cgroup", "r") as f:
-            cgroup = f.read().lower()
-        clues["docker_cgroup"] = "docker" in cgroup or "kubepods" in cgroup
-    except Exception:
+            cg = f.read().lower()
+        clues["docker_cgroup"] = "docker" in cg or "kubepods" in cg
+    except:
         clues["docker_cgroup"] = False
 
-    # Generic VM hints
-    vm_indicators = {
-        "vbox": False,
-        "vmware": False,
-        "qemu": False,
-    }
+    vms = {"vbox": False, "vmware": False, "qemu": False}
     if sys.platform == "win32":
         try:
-            system_info = subprocess.check_output(
-                ["systeminfo"], shell=False, timeout=10
-            ).decode("utf-8", errors="replace").lower()
-            vm_indicators["vbox"] = "virtualbox" in system_info
-            vm_indicators["vmware"] = "vmware" in system_info
-            vm_indicators["qemu"] = "qemu" in system_info
-        except Exception:
+            si = subprocess.check_output(["systeminfo"], shell=False, timeout=10)
+            si = si.decode("utf-8", errors="replace").lower()
+            vms["vbox"] = "virtualbox" in si
+            vms["vmware"] = "vmware" in si
+            vms["qemu"] = "qemu" in si
+        except:
             pass
     else:
         try:
-            dmesg = subprocess.check_output(["dmesg"], timeout=5).decode(
-                "utf-8", errors="replace"
-            ).lower()
-            vm_indicators["vbox"] = "vbox" in dmesg
-            vm_indicators["vmware"] = "vmware" in dmesg
-            vm_indicators["qemu"] = "qemu" in dmesg
-        except Exception:
+            d = subprocess.check_output(["dmesg"], timeout=5).decode("utf-8", errors="replace").lower()
+            vms["vbox"] = "vbox" in d
+            vms["vmware"] = "vmware" in d
+            vms["qemu"] = "qemu" in d
+        except:
             pass
 
-    clues.update(vm_indicators)
+    clues.update(vms)
     return clues
 
 
-# ---------------------------------------------------------------------------
-# Aggregate report
-# ---------------------------------------------------------------------------
+# --------------- all together ---------------
 
-def collect_environment_report() -> dict:
-    """Gather all environment diagnostics into a single report dict."""
-    report = {"host": get_host_info()}
-
-    # Ports – do not block the pre-flight check for long
-    try:
-        report["ports"] = get_port_status()
-    except Exception:
-        report["ports"] = {"error": "scan-failed"}
+def sniff_everything() -> dict:
+    # one call to grab everything at once
+    report = {"host": grab_host()}
 
     try:
-        report["discord_process"] = detect_discord()
-    except Exception:
-        report["discord_process"] = "error"
+        report["ports"] = scan_ports()
+    except:
+        report["ports"] = {"error": "scan died"}
 
     try:
-        report["container_vm"] = detect_container_or_vm()
-    except Exception:
-        report["container_vm"] = {"error": "detection-failed"}
+        report["discord_process"] = discord_check()
+    except:
+        report["discord_process"] = "err"
+
+    try:
+        report["container_vm"] = vmcheck()
+    except:
+        report["container_vm"] = {"error": "vm check died"}
 
     return report

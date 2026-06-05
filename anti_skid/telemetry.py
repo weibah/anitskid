@@ -1,240 +1,186 @@
-"""
-Anti-Skid :: Telemetry / Breach Reporter
-Builds a structured diagnostic report and exfiltrates it to a Discord webhook.
-Non-blocking (asynchronous in a daemon thread).
-"""
+# builds the breach report and ships it to discord
+# runs in a background thread so it doesnt slow anything down
+# if no webhook it just dumps to stderr whatever
 
 import json
 import os
 import sys
 import threading
-import traceback
 import urllib.request
 import datetime
-from typing import Optional
 
-from .integrity import AuditResult
-from .environment import collect_environment_report
+from .environment import sniff_everything
 
-# ---------------------------------------------------------------------------
-# Report builder
-# ---------------------------------------------------------------------------
-
-MAX_FIELD_LENGTH = 1000  # Discord embed field value cap
+MAX_LEN = 1000  # discord dont like long messages
 
 
-def _truncate(text: str, max_len: int = MAX_FIELD_LENGTH) -> str:
-    """Truncate text and append a notice if too long."""
+def _chop(text: str, max_len: int = MAX_LEN) -> str:
+    # cuts text if its too long
     if len(text) <= max_len:
         return text
-    return text[: max_len - 30] + "\n\n... [truncated by Anti-Skid]"
+    return text[: max_len - 30] + "\n\n... [chopped]"
 
 
-def _format_mismatch_table(mismatches: list) -> str:
-    """Format hash mismatches into a compact ASCII block."""
+def _fmt_mismatches(mismatches: list) -> str:
+    # makes a readable list of hash mismatches
     if not mismatches:
-        return "None"
+        return "none lol"
     lines = []
     for m in mismatches:
-        lines.append(f"• {m['path']}")
-        lines.append(f"  Expected: {m['expected'][:16]}...")
-        lines.append(f"  Actual:   {m['actual'][:16]}...")
+        lines.append(f"- {m['path']}")
+        lines.append(f"  expected: {m['expected'][:16]}...")
+        lines.append(f"  got:      {m['actual'][:16]}...")
         lines.append("")
-    return _truncate("\n".join(lines))
+    return _chop("\n".join(lines))
 
 
-def build_breach_report(audit: AuditResult) -> str:
-    """
-    Compose the breach telemetry report as a human-readable .txt artifact.
-
-    Parameters
-    ----------
-    audit : AuditResult from integrity.verify_integrity()
-
-    Returns
-    -------
-    str : formatted report text
-    """
+def build_report(audit: dict) -> str:
+    # builds the whole breach report as a text file
     now = datetime.datetime.utcnow().isoformat() + "Z"
 
-    # Gather environment data
-    env_info = collect_environment_report()
-    host = env_info.get("host", {})
-    ports = env_info.get("ports", {})
-    discord = env_info.get("discord_process", "N/A")
-    container_vm = env_info.get("container_vm", {})
+    env = sniff_everything()
+    host = env.get("host", {})
+    ports = env.get("ports", {})
+    discord = env.get("discord_process", "???")
+    vm = env.get("container_vm", {})
 
-    sections = []
+    out = []
 
-    sections.append("=" * 64)
-    sections.append("  ANTI-SKID :: BREACH TELEMETRY REPORT")
-    sections.append("=" * 64)
-    sections.append(f"Timestamp (UTC)     : {now}")
-    sections.append(f"Integrity Passed    : {audit['passed']}")
-    sections.append(f"Audit Duration (ms) : {audit['elapsed_ms']}")
-    sections.append(f"Total Baseline Files: {audit['total_files']}")
-    sections.append(f"Matched             : {audit['matched']}")
-    sections.append(f"Mismatches          : {len(audit['mismatches'])}")
-    sections.append(f"Missing Files       : {len(audit['missing'])}")
-    sections.append(f"New / Unknown Files : {len(audit['new_files'])}")
+    out.append("=" * 64)
+    out.append("  ANTI SKID BREACH REPORT")
+    out.append("=" * 64)
+    out.append(f"time: {now}")
+    out.append(f"passed: {audit['passed']}")
+    out.append(f"took: {audit['elapsed_ms']}ms")
+    out.append(f"total files: {audit['total_files']}")
+    out.append(f"matched: {audit['matched']}")
+    out.append(f"mismatches: {len(audit['mismatches'])}")
+    out.append(f"missing: {len(audit['missing'])}")
+    out.append(f"new/unknown: {len(audit['new_files'])}")
 
     if audit.get("error"):
-        sections.append(f"\n!! AUDIT ERROR: {audit['error']}")
+        out.append(f"\n!! audit error: {audit['error']}")
 
-    # --- File Integrity Audit -----------------------------------------------
-    sections.append("\n" + "-" * 64)
-    sections.append("  FILE INTEGRITY AUDIT (Hash Mismatches)")
-    sections.append("-" * 64)
-    sections.append(_format_mismatch_table(audit["mismatches"]))
+    # mismatches section
+    out.append("\n" + "-" * 64)
+    out.append("  FILES THAT GOT TOUCHED")
+    out.append("-" * 64)
+    out.append(_fmt_mismatches(audit["mismatches"]))
 
     if audit.get("missing"):
-        sections.append("\n--- MISSING FILES ---")
+        out.append("\n-- MISSING FILES --")
         for m in audit["missing"]:
-            sections.append(f"  • {m}  [DELETED OR RENAMED]")
+            out.append(f"  - {m}  [deleted or renamed]")
 
     if audit.get("new_files"):
-        sections.append("\n--- NEW / UNTRACKED FILES ---")
+        out.append("\n-- NEW / UNTRACKED FILES --")
         for nf in audit["new_files"]:
-            sections.append(f"  • {nf}")
+            out.append(f"  - {nf}")
 
-    # --- Host Diagnostics ---------------------------------------------------
-    sections.append("\n" + "-" * 64)
-    sections.append("  HOST DIAGNOSTICS")
-    sections.append("-" * 64)
-    sections.append(f"Hostname      : {host.get('hostname', 'N/A')}")
-    sections.append(f"Username      : {host.get('username', 'N/A')}")
-    sections.append(f"Local IP      : {host.get('local_ip', 'N/A')}")
-    sections.append(f"Public IP     : {host.get('public_ip', 'N/A')}")
-    sections.append(f"Platform      : {host.get('platform', 'N/A')}")
-    sections.append(f"Python        : {host.get('python_version', 'N/A')}")
+    # host info
+    out.append("\n" + "-" * 64)
+    out.append("  WHO GOT CAUGHT")
+    out.append("-" * 64)
+    out.append(f"hostname: {host.get('hostname', '???')}")
+    out.append(f"username: {host.get('username', '???')}")
+    out.append(f"local ip: {host.get('local_ip', '???')}")
+    out.append(f"public ip: {host.get('public_ip', '???')}")
+    out.append(f"platform: {host.get('platform', '???')}")
+    out.append(f"python: {host.get('python_version', '???')}")
 
-    # --- Environment Markers ------------------------------------------------
-    sections.append("\n" + "-" * 64)
-    sections.append("  ENVIRONMENT MARKERS")
-    sections.append("-" * 64)
-    sections.append(f"Discord Running : {discord}")
+    # env markers
+    out.append("\n" + "-" * 64)
+    out.append("  ENVIRONMENT")
+    out.append("-" * 64)
+    out.append(f"discord open: {discord}")
+    out.append(f"docker env file: {vm.get('docker_env_file', False)}")
+    out.append(f"docker cgroup: {vm.get('docker_cgroup', False)}")
+    out.append(f"virtualbox: {vm.get('vbox', False)}")
+    out.append(f"vmware: {vm.get('vmware', False)}")
+    out.append(f"qemu: {vm.get('qemu', False)}")
 
-    # Container / VM
-    cv = container_vm
-    sections.append(f"Docker Env File : {cv.get('docker_env_file', False)}")
-    sections.append(f"Docker CGroup   : {cv.get('docker_cgroup', False)}")
-    sections.append(f"VirtualBox      : {cv.get('vbox', False)}")
-    sections.append(f"VMware          : {cv.get('vmware', False)}")
-    sections.append(f"QEMU            : {cv.get('qemu', False)}")
+    # ports
+    out.append("\n" + "-" * 64)
+    out.append("  PORTS (localhost)")
+    out.append("-" * 64)
+    if ports:
+        for pl, status in sorted(ports.items()):
+            out.append(f"  {pl:<20} {status}")
+    else:
+        out.append("  (none)")
 
-    # --- Port Status ------------------------------------------------
-    sections.append("\n" + "-" * 64)
-    sections.append("  PORT STATUS (127.0.0.1)")
-    sections.append("-" * 64)
-    port_lines = []
-    for port_label, status in sorted(ports.items()):
-        port_lines.append(f"  {port_label:<20} {status}")
-    sections.append("\n".join(port_lines) if port_lines else "  (none)")
+    out.append("\n" + "=" * 64)
+    out.append("  END")
+    out.append("=" * 64)
 
-    sections.append("\n" + "=" * 64)
-    sections.append("  END OF REPORT")
-    sections.append("=" * 64)
-
-    return "\n".join(sections)
+    return "\n".join(out)
 
 
-# ---------------------------------------------------------------------------
-# Discord webhook delivery (non-blocking)
-# ---------------------------------------------------------------------------
+# --------------- discord webhook ---------------
 
+def _send_discord(webhook_url: str, report: str) -> bool:
+    # sends the report as a .txt file to a discord webhook
+    boundary = "----antisKidBoundary"
 
-def _send_to_discord(webhook_url: str, report_text: str) -> bool:
-    """
-    Push the breach report to a Discord webhook as a file attachment.
-    Uses Discord's webhook API with multipart/form-data.
-    """
-    boundary = "----AntiSkidBoundary"
+    parts = []
 
-    # Build multipart body manually to attach a .txt file
-    payload_parts = []
-
-    # JSON payload part (required by Discord)
-    payload_json = json.dumps({
-        "content": ":warning: **ANTI-SKID BREACH DETECTED**",
-        "username": "Anti-Skid Sentinel",
+    # json payload
+    payload = json.dumps({
+        "content": ":warning: **ANTI SKID BREACH**",
+        "username": "anti-skid",
     })
-    payload_parts.append(f"--{boundary}")
-    payload_parts.append('Content-Disposition: form-data; name="payload_json"')
-    payload_parts.append("Content-Type: application/json")
-    payload_parts.append("")
-    payload_parts.append(payload_json)
+    parts.append(f"--{boundary}")
+    parts.append('Content-Disposition: form-data; name="payload_json"')
+    parts.append("Content-Type: application/json")
+    parts.append("")
+    parts.append(payload)
 
-    # File part
-    timestamp = datetime.datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-    filename = f"anti_skid_breach_{timestamp}.txt"
-    payload_parts.append(f"--{boundary}")
-    payload_parts.append(f'Content-Disposition: form-data; name="file"; filename="{filename}"')
-    payload_parts.append("Content-Type: text/plain")
-    payload_parts.append("")
-    payload_parts.append(report_text)
+    # file part
+    ts = datetime.datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    fname = f"breach_{ts}.txt"
+    parts.append(f"--{boundary}")
+    parts.append(f'Content-Disposition: form-data; name="file"; filename="{fname}"')
+    parts.append("Content-Type: text/plain")
+    parts.append("")
+    parts.append(report)
 
-    payload_parts.append(f"--{boundary}--")
-    payload_parts.append("")
+    parts.append(f"--{boundary}--")
+    parts.append("")
 
-    body_bytes = "\r\n".join(payload_parts).encode("utf-8")
-
-    content_type = f"multipart/form-data; boundary={boundary}"
+    body = "\r\n".join(parts).encode("utf-8")
+    ct = f"multipart/form-data; boundary={boundary}"
 
     req = urllib.request.Request(
         webhook_url,
-        data=body_bytes,
-        headers={
-            "Content-Type": content_type,
-            "User-Agent": "Anti-Skid/1.0",
-        },
+        data=body,
+        headers={"Content-Type": ct, "User-Agent": "anti-skid/1.0"},
         method="POST",
     )
 
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:
             return 200 <= resp.status < 300
-    except Exception:
+    except:
         return False
 
 
-def report_breach(
-    webhook_url: Optional[str],
-    audit: AuditResult,
-) -> None:
-    """
-    Build the breach report and fire it to the Discord webhook asynchronously.
-
-    If *webhook_url* is None or empty, the report is printed to stderr instead.
-
-    Parameters
-    ----------
-    webhook_url : str or None
-        Discord webhook URL.  If None, falls back to ANTI_SKID_WEBHOOK env var.
-    audit : AuditResult
-        The result from verify_integrity().
-    """
-    # Resolve webhook URL
+def report_breach(webhook_url, audit):
+    # builds report and fires it off in the background
     if not webhook_url:
         webhook_url = os.environ.get("ANTI_SKID_WEBHOOK")
 
-    report_text = build_breach_report(audit)
+    report_text = build_report(audit)
 
     if not webhook_url:
-        print(
-            "\n[Anti-Skid] No webhook configured.  Breach report follows:\n",
-            file=sys.stderr,
-        )
+        print("\n[anti-skid] no webhook set, here's the report:\n", file=sys.stderr)
         print(report_text, file=sys.stderr)
         return
 
-    # Fire-and-forget in a daemon thread
-    def _task():
-        success = _send_to_discord(webhook_url, report_text)
-        if not success:
-            print(
-                "[Anti-Skid] WARNING: Failed to deliver telemetry to webhook.",
-                file=sys.stderr,
-            )
+    # fire and forget in a thread
+    def _send():
+        ok = _send_discord(webhook_url, report_text)
+        if not ok:
+            print("[anti-skid] failed to send webhook rip", file=sys.stderr)
 
-    t = threading.Thread(target=_task, daemon=True, name="anti-skid-telemetry")
+    t = threading.Thread(target=_send, daemon=True, name="anti-skid-webhook")
     t.start()

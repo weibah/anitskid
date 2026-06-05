@@ -1,90 +1,41 @@
-"""
-Anti-Skid :: Integrity Engine
-Performs the pre-flight hash audit, comparing current file state against
-the gold-standard manifest.
-"""
+# compares current file hashes against manifest.json
+# if anything looks sus it reports back
 
 import hashlib
-import json
 import os
-import sys
 import time
-from typing import Tuple, List, Dict
 
 from .manifest import load_manifest, MANIFEST_FILENAME
 
 CHUNK_SIZE = 8192
 
-# ---------------------------------------------------------------------------
-# Audit result data-class (lightweight tuple-based)
-# ---------------------------------------------------------------------------
-
-AuditResult = Dict
-"""
-An audit result is a dict:
-{
-    "passed": bool,
-    "elapsed_ms": float,
-    "total_files": int,
-    "matched": int,
-    "mismatches": [
-        {"path": str, "expected": str, "actual": str},
-        ...
-    ],
-    "missing": [str, ...],
-    "new_files": [str, ...],
-    "error": str | None,
-}
-"""
-
-# ---------------------------------------------------------------------------
-# Verification
-# ---------------------------------------------------------------------------
-
 
 def _hash_file(filepath: str) -> str:
-    """SHA-256 of a single file."""
-    hasher = hashlib.sha256()
+    # sha256 a single file
+    h = hashlib.sha256()
     try:
-        with open(filepath, "rb") as fh:
+        with open(filepath, "rb") as f:
             while True:
-                chunk = fh.read(CHUNK_SIZE)
+                chunk = f.read(CHUNK_SIZE)
                 if not chunk:
                     break
-                hasher.update(chunk)
-        return hasher.hexdigest()
-    except (OSError, PermissionError) as exc:
-        return f"ERROR:{exc}"
+                h.update(chunk)
+        return h.hexdigest()
+    except (OSError, PermissionError) as e:
+        return f"DEAD:{e}"
 
 
-def _normalise_path(p: str) -> str:
-    """Normalise path separators to forward-slash for comparison."""
+def _fix_path(p: str) -> str:
+    # make sure slashes are forward for comparison
     return p.replace("\\", "/")
 
 
-def verify_integrity(
-    manifest_path: str = None,
-    project_root: str = None,
-) -> AuditResult:
-    """
-    Re-hash every file enumerated in the manifest and compare digests.
-
-    Parameters
-    ----------
-    manifest_path : str or None
-        Path to manifest.json.  If None, looks for MANIFEST_FILENAME in
-        *project_root* (or cwd if *project_root* is also None).
-    project_root : str or None
-        Root directory of the project.  Defaults to the directory
-        containing the manifest.
-
-    Returns
-    -------
-    AuditResult
-    """
+def verify_integrity(manifest_path: str = None, project_root: str = None) -> dict:
+    # rehashes everything and compares to the baseline
+    # returns a dict with all the info about whats broken
     t0 = time.perf_counter()
 
-    # --- Resolve manifest ---------------------------------------------------
+    # figure out paths
     if manifest_path is None:
         if project_root is None:
             project_root = os.getcwd()
@@ -97,10 +48,10 @@ def verify_integrity(
     else:
         project_root = os.path.abspath(project_root)
 
-    # --- Load baseline ------------------------------------------------------
+    # load the baseline
     try:
         manifest = load_manifest(manifest_path)
-    except Exception as exc:
+    except Exception as e:
         elapsed = (time.perf_counter() - t0) * 1000
         return {
             "passed": False,
@@ -110,48 +61,46 @@ def verify_integrity(
             "mismatches": [],
             "missing": [],
             "new_files": [],
-            "error": f"Manifest load failed: {exc}",
+            "error": f"couldnt load manifest: {e}",
         }
 
-    baseline: Dict[str, str] = manifest.get("files", {})
-    mismatches: List[dict] = []
-    missing: List[str] = []
+    baseline = manifest.get("files", {})
+    mismatches = []
+    missing = []
     matched = 0
 
-    # --- Check every file in the baseline -----------------------------------
+    # check every file thats supposed to exist
     for rel_path, expected_hash in sorted(baseline.items()):
-        abs_path = os.path.join(project_root, _normalise_path(rel_path))
+        abs_path = os.path.join(project_root, _fix_path(rel_path))
 
         if not os.path.isfile(abs_path):
-            missing.append(_normalise_path(rel_path))
+            missing.append(_fix_path(rel_path))
             continue
 
         actual_hash = _hash_file(abs_path)
 
         if actual_hash != expected_hash:
             mismatches.append({
-                "path": _normalise_path(rel_path),
+                "path": _fix_path(rel_path),
                 "expected": expected_hash,
                 "actual": actual_hash,
             })
         else:
             matched += 1
 
-    # --- Scan for new files not in the baseline -----------------------------
-    new_files: List[str] = []
+    # look for new files that arent in the manifest
+    new_files = []
     extensions = tuple(manifest.get("extensions", (".py", ".pyw", ".pyc")))
     exclude_dirs = set(manifest.get("excluded_directories", ("__pycache__", ".git")))
-    # Also skip the manifest itself
-    manifest_file_rel = os.path.relpath(manifest_path, project_root)
-    manifest_file_rel = _normalise_path(manifest_file_rel)
+    manifest_rel = _fix_path(os.path.relpath(manifest_path, project_root))
 
     for dirpath, dirnames, filenames in os.walk(project_root):
         dirnames[:] = [d for d in dirnames if d not in exclude_dirs]
         for fname in filenames:
             if fname.endswith(extensions):
                 abs_path = os.path.join(dirpath, fname)
-                rel_path = _normalise_path(os.path.relpath(abs_path, project_root))
-                if rel_path == manifest_file_rel:
+                rel_path = _fix_path(os.path.relpath(abs_path, project_root))
+                if rel_path == manifest_rel:
                     continue
                 if rel_path not in baseline:
                     new_files.append(rel_path)
