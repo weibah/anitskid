@@ -10,8 +10,79 @@ import os
 import sys
 import threading
 
+_MANIFEST_FILE = "manifest.json"
 _started = False
 _lock = threading.Lock()
+
+
+def _find_manifest() -> str:
+    """find manifest.json by checking multiple places"""
+
+    # 1) explicit env var
+    env_path = os.environ.get("ANTI_SKID_MANIFEST")
+    if env_path and os.path.isfile(env_path):
+        return env_path
+
+    # 2) walk UP from cwd looking for manifest.json
+    cwd = os.getcwd()
+    for _ in range(10):
+        candidate = os.path.join(cwd, _MANIFEST_FILE)
+        if os.path.isfile(candidate):
+            return candidate
+        parent = os.path.dirname(cwd)
+        if parent == cwd:  # hit root
+            break
+        cwd = parent
+
+    # 3) check relative to the location of THIS file (the anti_skid package dir)
+    our_dir = os.path.dirname(os.path.abspath(__file__))
+    candidate = os.path.join(our_dir, _MANIFEST_FILE)
+    if os.path.isfile(candidate):
+        return candidate
+
+    # 4) walk DOWN from the anti_skid package dir (it might be one dir above)
+    parent_of_us = os.path.dirname(our_dir)
+    candidate = os.path.join(parent_of_us, _MANIFEST_FILE)
+    if os.path.isfile(candidate):
+        return candidate
+
+    # 5) walk UP from the anti_skid dir
+    search = parent_of_us
+    for _ in range(5):
+        candidate = os.path.join(search, _MANIFEST_FILE)
+        if os.path.isfile(candidate):
+            return candidate
+        parent = os.path.dirname(search)
+        if parent == search:
+            break
+        search = parent
+
+    # 6) this is where the calling script wants us to look, even if it doesnt exist yet
+    #    (manifest generation will create it later)
+    #    use whatever we found from the frame, falling back to cwd
+    try:
+        import inspect
+        frame = inspect.currentframe()
+        # walk up past our own frames looking for the first non-anti_skid caller
+        f = frame.f_back if frame else None
+        while f:
+            mod = f.f_globals.get("__name__", "")
+            fname = f.f_globals.get("__file__", "")
+            # skip frames from inside the anti_skid package or stdlib
+            if "anti_skid" not in fname and "importlib" not in fname:
+                if fname:
+                    root = os.path.dirname(os.path.abspath(fname))
+                    candidate = os.path.join(root, _MANIFEST_FILE)
+                    # return the path even if it doesnt exist - the caller might be
+                    # generating the manifest for the first time
+                    return candidate
+            f = f.f_back
+    except:
+        pass
+
+    # 7) ultimate fallback: cwd
+    return os.path.join(os.getcwd(), _MANIFEST_FILE)
+
 
 def _do_check():
     global _started
@@ -29,21 +100,7 @@ def _do_check():
     from .integrity import verify_integrity
     from .telemetry import report_breach
 
-    # find manifest.json
-    manifest_path = os.environ.get("ANTI_SKID_MANIFEST")
-    if not manifest_path:
-        # try to find it relative to whoever imported us
-        try:
-            import inspect
-            frame = inspect.currentframe()
-            outer = frame.f_back.f_back if frame and frame.f_back else None
-            if outer and outer.f_globals.get("__file__"):
-                root = os.path.dirname(os.path.abspath(outer.f_globals["__file__"]))
-            else:
-                root = os.getcwd()
-        except:
-            root = os.getcwd()
-        manifest_path = os.path.join(root, "manifest.json")
+    manifest_path = _find_manifest()
 
     # run it
     audit = verify_integrity(manifest_path=manifest_path)

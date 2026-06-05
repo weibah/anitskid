@@ -26,12 +26,13 @@
     "*.egg-info"
   ],
   "files": {
-    "anti_skid/__init__.py": "8ed2287b0fe5bebc0bbbcaa40526618520bb0b1485bd2876019f1d7d0b8f76d6",
+    "anti_skid/__init__.py": "7fa049a5bcabbf26fc3136fd17fa01bd66f93d008425b621870d61c4a93b903d",
     "anti_skid/cli.py": "f28261fe368b2d99757287bff07efc483eb222369f87605a501b7762ca398faf",
     "anti_skid/environment.py": "8e591a75c3b0c87265b2a07e0790aff872866d95b009762a2cdf86d1dd64aa5c",
     "anti_skid/integrity.py": "a544357641165b58480df2218fb021d20140dbc6103a5e6e991fc06ad6af62a2",
     "anti_skid/manifest.py": "6d37215fc55cfc097946780fa65213e46c50b36a0919eddbe8b67ac5a71f3814",
     "anti_skid/telemetry.py": "abd26596044fd5f17fcabd74b21b4d5d1788a6237bb74c101900a3075c5328f6",
+    "inject.py": "27e37c461ff6010c7140370bb049f970df7d513b1d2b3b04455b1f9b6867cedf",
     "setup.py": "77dfcd2248445f21828f9aa3052eca9d5038d1613a133145697981eae4e6456f"
   }
 }
