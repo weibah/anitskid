@@ -41,8 +41,8 @@ When a breach is detected, the report sent to your Discord includes:
 
 ```bash
 # Clone into your project
-git clone https://github.com/weibah/anti-skid.git
-cd anti-skid
+git clone https://github.com/weibah/anitskid.git
+cd anti_skid
 
 # Or install as a package
 pip install -e .

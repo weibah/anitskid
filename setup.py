@@ -12,7 +12,7 @@ setup(
     description="High-security integrity framework protecting source code from unauthorized modification",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/weibah/anti-skid",
+    url="https://github.com/weibah/anitskid",
     packages=find_packages(),
     classifiers=[
         "Development Status :: 5 - Production/Stable",
