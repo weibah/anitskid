@@ -28,10 +28,10 @@
   "files": {
     "anti_skid/__init__.py": "8ed2287b0fe5bebc0bbbcaa40526618520bb0b1485bd2876019f1d7d0b8f76d6",
     "anti_skid/cli.py": "f28261fe368b2d99757287bff07efc483eb222369f87605a501b7762ca398faf",
-    "anti_skid/environment.py": "15b201703006d2d065ba2f6ebff980149c11be6839d9163181150c64eb47dba7",
+    "anti_skid/environment.py": "8e591a75c3b0c87265b2a07e0790aff872866d95b009762a2cdf86d1dd64aa5c",
     "anti_skid/integrity.py": "a544357641165b58480df2218fb021d20140dbc6103a5e6e991fc06ad6af62a2",
     "anti_skid/manifest.py": "6d37215fc55cfc097946780fa65213e46c50b36a0919eddbe8b67ac5a71f3814",
-    "anti_skid/telemetry.py": "f8c1d1ab0784e08584c27df9525693978768f5b3d2c1cce7e3ac3a301cc3a951",
+    "anti_skid/telemetry.py": "abd26596044fd5f17fcabd74b21b4d5d1788a6237bb74c101900a3075c5328f6",
     "setup.py": "77dfcd2248445f21828f9aa3052eca9d5038d1613a133145697981eae4e6456f"
   }
 }
