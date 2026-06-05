@@ -1,0 +1,45 @@
+# Bytecode cache
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+*.egg
+.eggs/
+
+# Virtual environments
+venv/
+.venv/
+env/
+.env/
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS noise
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Sensitive config
+.env
+*.secret
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Anti-Skid manifest should NOT be ignored — it IS the gold standard
+# manifest.json  (DO NOT ignore — this is your integrity baseline)
+
+# User data / logs
+*.log

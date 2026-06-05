@@ -1,0 +1,8 @@
+# Anti-Skid has zero external dependencies.
+# The framework relies exclusively on the Python standard library.
+#
+# Optional development dependencies:
+# pip install anti-skid[dev]
+#
+# pytest>=7.0
+# pytest-cov>=4.0
