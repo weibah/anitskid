@@ -1,153 +1,89 @@
-# Anti-Skid
+# anti-skid
 
-> **High-Security Integrity Framework** — Your code, defended.
+stop skids from touching ur code lol
 
-Anti-Skid is a lightweight, dependency-free Python framework that acts as an automated "digital sentry" for your proprietary source code. It embeds a cryptographic verification layer directly into your project's execution pipeline. If anyone modifies your source code, the system triggers a defensive protocol: it terminates the application and sends you a detailed diagnostic report via Discord.
+## what it does
 
----
+basically hashes all ur files. if someone changes even 1 character the program goes boom and sends u a discord message telling u whos stealing ur shit. idk why ppl rip code its cringe
 
-## 🔐 How It Works
+## install
 
-### 1. Baseline Generation
-A one-time process hashes every file in your project using **SHA-256** and writes the fingerprints to an immutable `manifest.json` — the "gold standard" baseline.
-
-### 2. Pre-Flight Check
-Every time your program starts, Anti-Skid silently re-hashes the codebase and compares each digest against the baseline. This happens in milliseconds.
-
-### 3. Breach Detection
-If even a **single bit** has been altered — a renamed variable, an injected backdoor, a modified function — the check fails.
-
-### 4. Telemetry & Termination
-A structured diagnostic report is built and sent to your private Discord webhook (asynchronously). The process then terminates with exit code 1, preventing unauthorized execution.
-
----
-
-## 📦 The Breach Telemetry Bundle
-
-When a breach is detected, the report sent to your Discord includes:
-
-| Section | Content |
-|---------|---------|
-| **File Integrity Audit** | Which files were modified, expected vs. actual hashes |
-| **Host Diagnostics** | Public IP, local IP, hostname, username, platform |
-| **Environment Markers** | Discord process detection, Docker/container detection, VM detection (VirtualBox, VMware, QEMU) |
-| **Port Status** | Active port scan of common services on localhost |
-
----
-
-## 🚀 Quick Start
-
-### Installation
-
-```bash
-# Clone into your project
-git clone https://github.com/weibah/anitskid.git
-cd anti_skid
-
-# Or install as a package
+```
 pip install -e .
 ```
 
-### Step 1 — Generate Your Baseline
+or just copy the anti_skid folder into ur project idc
 
-```bash
-# From the CLI
-anti-skid-gen /path/to/your/project
+## how to use
 
-# Or programmatically
-python -c "from anti_skid.manifest import generate_manifest; generate_manifest('.')"
+### 1. make a baseline
 ```
+anti-skid-gen .
+```
+this makes manifest.json with all the hashes or whatever
 
-This creates `manifest.json` in your project root.
-
-### Step 2 — Add the Pre-Flight Check
-
-In your project's main entry point (e.g., `main.py` or `__init__.py`), add at the very top:
-
+### 2. slap this at the top of ur main file
 ```python
-import anti_skid  # ← MUST be the first import in your project
-
-# Your application logic goes here...
-def main():
-    print("All clear. Running normally.")
+import anti_skid
 ```
 
-### Step 3 — Configure Your Webhook (Optional)
+thats literally it. if the code got touched it dies and dms u on discord
 
-Set the environment variable for breach notifications:
-
-```bash
-# Windows
-set ANTI_SKID_WEBHOOK=https://discord.com/api/webhooks/...
-
-# Linux / macOS
-export ANTI_SKID_WEBHOOK=https://discord.com/api/webhooks/...
+### 3. webhook (optional)
 ```
+set ANTI_SKID_WEBHOOK=https://discord.com/api/webhooks/ur_webhook
+```
+or just export if ur not on windows. if u dont set one it just prints to console
 
-If no webhook is configured, the breach report will be printed to stderr instead.
+### 4. ship it
+include manifest.json with ur project. done. go outside
 
-### Step 4 — Deploy
+## what u get when someone steals ur code
 
-Ship your project with `manifest.json` included. Anti-Skid does the rest.
+- what files they touched + hash diffs
+- their ip (public + local)
+- their username + hostname
+- if discord is running
+- if theyre in a vm or docker
+- open ports on their machine
+- other nerd stuff
 
----
+## env vars
 
-## 🧰 Configuration
+| thing | does |
+|-------|------|
+| `ANTI_SKID_WEBHOOK` | discord link |
+| `ANTI_SKID_MANIFEST` | custom manifest path |
+| `ANTI_SKID_DISABLE` | set to 1 to skip check (dont do this) |
 
-| Environment Variable | Description | Default |
-|---------------------|-------------|---------|
-| `ANTI_SKID_WEBHOOK` | Discord webhook URL for breach telemetry | *(none — prints to stderr)* |
-| `ANTI_SKID_MANIFEST` | Custom path to `manifest.json` | `<project_root>/manifest.json` |
-| `ANTI_SKID_DISABLE` | Set to `1` to bypass integrity check *(dev only!)* | *(enabled)* |
+## requirements
 
----
+python 3.8+ and literally nothing else. uses stdlib cuz i cba to pip install junk
 
-## 🔒 Security Recommendations
+## if ur gonna obfuscate it
 
-- **Bytecode Obfuscation**: Compile the Anti-Skid package into `.pyc` files or use tools like [PyArmor](https://pyarmor.readthedocs.io/) to protect the verification logic from reverse-engineering.
-- **Immutable Manifest**: Consider distributing `manifest.json` with read-only permissions or as a compiled resource.
-- **Webhook Rotation**: Use a dedicated Discord webhook and rotate it periodically to prevent abuse.
-- **Entry-Point Enforcement**: Place `import anti_skid` as the absolute first line of your entry point — before any other imports — to ensure the check runs before any application logic.
+pyarmor or compile to pyc. not that deep. just dont leave it raw if ur paranoid
 
----
-
-## 📁 Project Structure
+## files
 
 ```
 anti_skid/
 ├── anti_skid/
-│   ├── __init__.py      # Pre-flight check — runs on import
-│   ├── manifest.py      # Baseline generation & loading
-│   ├── integrity.py     # SHA-256 audit engine
-│   ├── telemetry.py     # Discord webhook reporter
-│   ├── environment.py   # Host/network/container diagnostics
-│   └── cli.py           # CLI entry point (anti-skid-gen)
+│   ├── __init__.py      # preflight check
+│   ├── manifest.py      # hashing stuff
+│   ├── integrity.py     # compares hashes
+│   ├── telemetry.py     # discord sender
+│   ├── environment.py   # sniffs the host
+│   └── cli.py           # anti-skid-gen
+├── manifest.json         # dont delete this lol
 ├── setup.py
-├── requirements.txt
-├── .gitignore
-├── README.md
-└── manifest.json         # ← Your gold-standard baseline
+└── requirements.txt
 ```
 
----
+## license
 
-## ⚙️ Requirements
-
-- **Python 3.8+**
-- **Zero external dependencies** — uses only the Python standard library.
+mit. do whatever
 
 ---
 
-## 📄 License
-
-MIT License — see [LICENSE](LICENSE) file for details.
-
----
-
-## ⚠️ Disclaimer
-
-Anti-Skid is an integrity verification tool designed to help you detect unauthorized modifications to your source code. It does not replace proper code signing, access controls, or legal protections. Use it as one layer in a comprehensive security strategy.
-
----
-
-*Anti-Skid — Your digital sentry, always watching.*
+*if u skid my anti-skid thats kinda ironic ngl*
