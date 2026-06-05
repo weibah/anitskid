@@ -2,17 +2,54 @@
 # if some skid touched ur code it nukes the process and dms u lmao
 # 
 # env vars:
-#   ANTI_SKID_WEBHOOK  -> ur discord webhook link
+#   ANTI_SKID_WEBHOOK  -> ur discord webhook link (overrides webhook.json)
 #   ANTI_SKID_MANIFEST -> path to manifest.json if its not in the project root
 #   ANTI_SKID_DISABLE  -> set to 1 to skip the check (why would u do this)
 
 import os
 import sys
+import json as _json
 import threading
 
 _MANIFEST_FILE = "manifest.json"
 _started = False
 _lock = threading.Lock()
+
+
+def _load_webhook_from_cfg() -> str:
+    """try to read webhook.json from project root"""
+    for base in (_find_manifest_base(), os.getcwd()):
+        if base:
+            cfg = os.path.join(base, "webhook.json")
+            if os.path.isfile(cfg):
+                try:
+                    with open(cfg, "r") as f:
+                        data = _json.load(f)
+                    return data.get("discord_webhook", "")
+                except:
+                    pass
+    return ""
+
+
+def _find_manifest_base() -> str:
+    """return the directory that contains manifest.json, or None"""
+    for base_dir in [os.environ.get("ANTI_SKID_MANIFEST"), None]:
+        if base_dir:
+            if os.path.isfile(base_dir):
+                return os.path.dirname(base_dir)
+            elif os.path.isdir(base_dir):
+                if os.path.isfile(os.path.join(base_dir, _MANIFEST_FILE)):
+                    return base_dir
+    # walk up from cwd
+    cwd = os.getcwd()
+    for _ in range(10):
+        if os.path.isfile(os.path.join(cwd, _MANIFEST_FILE)):
+            return cwd
+        parent = os.path.dirname(cwd)
+        if parent == cwd:
+            break
+        cwd = parent
+    return None
 
 
 def _find_manifest() -> str:
@@ -120,7 +157,7 @@ def _do_check():
           f"  new files: {len(audit['new_files'])}",
           file=sys.stderr)
 
-    webhook = os.environ.get("ANTI_SKID_WEBHOOK")
+    webhook = os.environ.get("ANTI_SKID_WEBHOOK") or _load_webhook_from_cfg()
     report_breach(webhook, audit)
 
     print("[anti-skid] killing process cuz ur code got skidded", file=sys.stderr)

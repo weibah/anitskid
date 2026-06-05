@@ -7,6 +7,7 @@
 import os
 import sys
 import shutil
+import json
 
 # where anti-skid itself lives (the package folder)
 _OUR_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -105,6 +106,16 @@ def _copy_anti_skid(target_dir: str) -> str:
     return dest
 
 
+def _save_webhook(target_dir: str, webhook_url: str):
+    # saves the webhook url to webhook.json so anti-skid uses it by default
+    cfg_path = os.path.join(target_dir, "webhook.json")
+    data = {"discord_webhook": webhook_url}
+    with open(cfg_path, "w") as f:
+        json.dump(data, f, indent=2)
+    print(f"  [ok] webhook saved -> {cfg_path}")
+    return cfg_path
+
+
 def _generate_manifest_in(target_dir: str):
     # generates manifest.json for the target project
     import subprocess
@@ -156,6 +167,14 @@ def inject(target_path: str) -> bool:
     # step 1: copy the module
     print(f"\n[1] copying anti_skid module...")
     _copy_anti_skid(target_dir)
+
+    # step 1.5: ask for webhook
+    print(f"\n[1.5] discord webhook (press enter to skip)...")
+    webhook_url = input("  webhook url: ").strip()
+    if webhook_url and "discord.com/api/webhooks/" in webhook_url:
+        _save_webhook(target_dir, webhook_url)
+    elif webhook_url:
+        print(f"  [warn] that dont look like a discord webhook url, skipping")
 
     # step 2: inject import into main file
     print(f"\n[2] injecting import...")
